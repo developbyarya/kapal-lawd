@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPS Location Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+      #map {
+        height: 600px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GPS Location Tracker</h1>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      // Initialize the map
+      const map = L.map("map").setView([-6.2, 106.816666], 13); // Set default view to Jakarta, Indonesia
+
+      // Add OpenStreetMap tiles
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+
+      // Create a marker for the GPS location
+      const marker = L.marker([-6.2, 106.816666]).addTo(map); // Initial position
+
+      // Connect to the WebSocket server
+      const ws = new WebSocket("ws://localhost:8080");
+
+      ws.onmessage = (event) => {
+        const data = event.data;
+        console.log("Received GPS Data:", data);
+
+        // Parse the latitude and longitude from the received data
+        const parsedData = parseGPSData(data);
+        if (parsedData) {
+          const { lat, lng } = parsedData;
+
+          // Update the marker position on the map
+          marker.setLatLng([lat, lng]);
+          map.setView([lat, lng], 13); // Move the map to the new location
+        }
+      };
+
+      ws.onopen = () => {
+        console.log("WebSocket connection opened");
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket connection closed");
+      };
+
+      // Function to parse GPS data
+      function parseGPSData(data) {
+        const regex = /Lat: (-?\d+\.\d+), Lng: (-?\d+\.\d+)/; // Regex to extract lat and lng
+        const match = data.match(regex);
+        if (match) {
+          return {
+            lat: parseFloat(match[1]),
+            lng: parseFloat(match[2]),
+          };
+        }
+        return null;
+      }
+    </script>
+  </body>
+</html>
