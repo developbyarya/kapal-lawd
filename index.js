@@ -1,48 +1,57 @@
 const mqtt = require("mqtt");
 const WebSocket = require("ws");
 
-// MQTT broker configuration
-const mqttBroker = "mqtt:localhost"; // Replace with your MQTT broker address
-const mqttTopic = "gps/location"; // The topic to subscribe to
+// MQTT Client
+const mqttClient = mqtt.connect("mqtt://localhost"); // Replace with your MQTT broker address
 
-// WebSocket server configuration
-const wsPort = 8080; // Port for WebSocket server
+// WebSocket Server
+const wss = new WebSocket.Server({ port: 8080 });
 
-// Create MQTT client and connect to broker
-const mqttClient = mqtt.connect(mqttBroker);
+// When WebSocket server is connected
+wss.on("connection", (ws) => {
+  console.log("WebSocket client connected");
 
-// Create WebSocket server
-const wss = new WebSocket.Server({ port: wsPort });
+  // Handle disconnection
+  ws.on("close", () => {
+    console.log("WebSocket client disconnected");
+  });
+});
 
+// Subscribe to the desired MQTT topic
 mqttClient.on("connect", () => {
   console.log("Connected to MQTT broker");
-  mqttClient.subscribe(mqttTopic, (err) => {
-    if (err) {
-      console.error(`Failed to subscribe to topic ${mqttTopic}:`, err);
-    } else {
-      console.log(`Subscribed to topic: ${mqttTopic}`);
+  mqttClient.subscribe("gps/data", (err) => {
+    if (!err) {
+      console.log("Subscribed to topic: gps/data");
     }
   });
 });
 
+// Parse and forward MQTT messages
 mqttClient.on("message", (topic, message) => {
-  const gpsData = message.toString();
-  console.log(`Received message: ${gpsData} on topic: ${topic}`);
+  console.log(`Received message from topic ${topic}: ${message.toString()}`);
 
-  // Forward GPS data to all connected WebSocket clients
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(gpsData);
+  // Try to parse the incoming message as JSON
+  try {
+    const parsedMessage = JSON.parse(message.toString());
+
+    // Ensure the message contains the expected fields
+    if (
+      parsedMessage.lat &&
+      parsedMessage.lng &&
+      parsedMessage.speed &&
+      parsedMessage.datetime
+    ) {
+      // Broadcast parsed message to all WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(parsedMessage)); // Forward the JSON data
+        }
+      });
+    } else {
+      console.error("Invalid data format in MQTT message");
     }
-  });
+  } catch (err) {
+    console.error("Failed to parse message as JSON:", err);
+  }
 });
-
-wss.on("connection", (ws) => {
-  console.log("New client connected");
-
-  ws.on("close", () => {
-    console.log("Client disconnected");
-  });
-});
-
-console.log(`WebSocket server is running on ws://localhost:${wsPort}`);

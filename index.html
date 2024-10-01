@@ -3,23 +3,142 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GPS Location Map</title>
+    <title>Ship Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f9;
+      }
+
+      /* Center the title */
+      h1 {
+        text-align: center;
+        margin: 20px 0;
+        color: #333;
+      }
+
+      /* Container for the entire layout */
+      .container {
+        display: flex;
+        justify-content: space-between;
+        margin: 20px;
+      }
+
+      /* Set map dimensions */
       #map {
-        height: 600px;
+        height: 400px;
+        width: 50%;
+        border-radius: 8px;
+        border: 2px solid #ccc;
+        margin-right: 20px;
+      }
+
+      /* Container for coordinates and datetime info */
+      .info-container {
+        width: 50%;
+        margin-bottom: 20px;
+        padding: 10px;
+      }
+
+      /* Styles for the displayed lat, lng, and datetime */
+      .info-item {
+        font-size: 18px;
+        margin-bottom: 10px;
+        color: #444;
+      }
+
+      .info-label {
+        font-weight: bold;
+        color: #333;
+      }
+
+      /* Webcam container styles */
+      .webcam-container {
+        flex: 1;
+        max-width: 45%;
+        margin-left: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      /* Webcam video styling */
+      #webcam {
         width: 100%;
+        max-width: 600px;
+        height: auto;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+      }
+
+      /* Apply padding for spacing */
+      .content {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      /* Simple styling for text */
+      .info-container {
+        background-color: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Clear floats to avoid layout issues */
+      .clear {
+        clear: both;
+      }
+      .flex {
+        display: flex;
+        justify-content: space-between;
+      }
+      .left {
+        width: 50%;
       }
     </style>
   </head>
   <body>
-    <h1>GPS Location Tracker</h1>
-    <div id="map"></div>
+    <h1>Ship Tracker</h1>
+    <div class="flex">
+      <div class="left">
+        <div id="map"></div>
+        <!-- Info Section for Lat, Lng, and Datetime -->
+        <div class="info-container">
+          <div class="info-item">
+            <span class="info-label">Latitude:</span>
+            <span id="latitude">N/A</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Longitude:</span>
+            <span id="longitude">N/A</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Speed:</span> <span id="Speed">N/A</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Last Updated Datetime:</span>
+            <span id="datetime">N/A</span>
+          </div>
+        </div>
+      </div>
+      <!-- Webcam Container -->
+      <div class="webcam-container">
+        <video id="webcam" autoplay playsinline></video>
+        <!-- Webcam Stream -->
+      </div>
+      <!-- Clear floats -->
+      <div class="clear"></div>
+    </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
       // Initialize the map
-      const map = L.map("map").setView([-6.2, 106.816666], 13); // Set default view to Jakarta, Indonesia
+      const map = L.map("map").setView([-6.2, 106.816666], 13); // Default location to Jakarta
 
       // Add OpenStreetMap tiles
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -27,7 +146,7 @@
         attribution: "© OpenStreetMap",
       }).addTo(map);
 
-      // Create a marker for the GPS location
+      // Create a marker for the ship's location
       const marker = L.marker([-6.2, 106.816666]).addTo(map); // Initial position
 
       // Connect to the WebSocket server
@@ -37,14 +156,30 @@
         const data = event.data;
         console.log("Received GPS Data:", data);
 
-        // Parse the latitude and longitude from the received data
+        // Parse the latitude, longitude, speed, and datetime from the received data
         const parsedData = parseGPSData(data);
         if (parsedData) {
-          const { lat, lng } = parsedData;
+          const { lat, lng, speed, datetime } = parsedData;
 
           // Update the marker position on the map
           marker.setLatLng([lat, lng]);
-          map.setView([lat, lng], 13); // Move the map to the new location
+
+          // Update the map view
+          map.setView([lat, lng], 13);
+
+          // Update the marker popup with speed and datetime
+          const popupContent = `<b>Location:</b> ${lat.toFixed(
+            6
+          )}, ${lng.toFixed(6)}<br/>
+                                      <b>Speed:</b> ${speed} km/h<br/>
+                                      <b>Datetime:</b> ${datetime}`;
+          marker.bindPopup(popupContent).openPopup();
+
+          // Update the information display below the map
+          document.getElementById("latitude").innerText = lat.toFixed(6);
+          document.getElementById("longitude").innerText = lng.toFixed(6);
+          document.getElementById("datetime").innerText = datetime;
+          document.getElementById("speed").innerText = speed;
         }
       };
 
@@ -56,18 +191,41 @@
         console.log("WebSocket connection closed");
       };
 
-      // Function to parse GPS data
+      // Function to parse GPS data (lat, lng, speed, datetime)
       function parseGPSData(data) {
-        const regex = /Lat: (-?\d+\.\d+), Lng: (-?\d+\.\d+)/; // Regex to extract lat and lng
-        const match = data.match(regex);
-        if (match) {
-          return {
-            lat: parseFloat(match[1]),
-            lng: parseFloat(match[2]),
-          };
+        try {
+          // Assuming the data is in JSON format with keys: lat, lng, speed, datetime
+          const parsed = JSON.parse(data);
+
+          if (parsed.lat && parsed.lng && parsed.speed && parsed.datetime) {
+            return {
+              lat: parseFloat(parsed.lat),
+              lng: parseFloat(parsed.lng),
+              speed: parseFloat(parsed.speed),
+              datetime: parsed.datetime,
+            };
+          }
+        } catch (error) {
+          console.error("Error parsing GPS data:", error);
         }
         return null;
       }
+
+      // Function to handle webcam streaming
+      async function startWebcam() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          const videoElement = document.getElementById("webcam");
+          videoElement.srcObject = stream;
+        } catch (error) {
+          console.error("Error accessing webcam:", error);
+        }
+      }
+
+      // Start webcam stream
+      startWebcam();
     </script>
   </body>
 </html>
